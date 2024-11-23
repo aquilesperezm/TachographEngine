@@ -6,7 +6,12 @@ from skimage.feature import canny
 
 class ImageTreatment:
     def __init__(self, image):
+
+        self.min_threshold = None
+        self.max_threshold = None
+        self.edges = None
         self.image = image
+        self.contours = None
 
     def get_image(self):
         return self.image
@@ -30,71 +35,58 @@ class ImageTreatment:
 
         self.image = imagen_recortada
 
-    def get_edges(self, canny_threshold_min:int,canny_threshold_max:int,noise_reduction: bool):
-
-        edges = None
+    def generate_edges(self,noise_reduction: bool):
 
         if noise_reduction:
             img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
-            edges = cv2.Canny(img_blur, canny_threshold_min, canny_threshold_max)
+            edges = cv2.Canny(img_blur, self.min_threshold, self.max_threshold)
         # -----------------------------------------------------------------------------------------------------------
         else:
             # Detectar bordes con Canny
-            edges = cv2.Canny(self.image, canny_threshold_min, canny_threshold_max)
+            edges = cv2.Canny(self.image, self.min_threshold, self.max_threshold)
 
-        return edges
+        self.edges = edges
 
-    def get_thresh(self,threshold_min:int,threshold_max:int,):
+    def get_thresh(self):
         # Convertir a escala de grises
         gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
 
         # Aplicar un umbral
-        _, thresh = cv2.threshold(gray, threshold_min, threshold_max, cv2.THRESH_BINARY_INV)
+        _, thresh = cv2.threshold(gray, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
 
         return thresh
 
-    def detect_contours(self, canny_threshold_min:int,canny_threshold_max:int,use_canny:bool = False, order_area: bool = False, noise_reduction: bool = False, border_smoothed: bool = False):
-
-        # Cargar la imagen
-        # img_blur = cv2.imread(imagePath, 0)  # Cargar en escala de grises
+    def generate_contours(self,use_canny:bool = False, noise_reduction: bool = False, border_smoothed: bool = False):
 
         # ----------------------------------- Reduccion de Ruido ---------------------------------------------------
-
-
-
         if not use_canny and noise_reduction:
             img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
-            _, edges = cv2.threshold(img_blur, canny_threshold_min, canny_threshold_max, cv2.THRESH_BINARY_INV)
+            _, self.edges = cv2.threshold(img_blur, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
         elif not use_canny:
-            _, edges = cv2.threshold(self.image, canny_threshold_min, canny_threshold_max, cv2.THRESH_BINARY_INV)
+            _, self.edges = cv2.threshold(self.image, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
         else:
-            edges = self.get_edges(canny_threshold_min, canny_threshold_max, noise_reduction)
+            self.generate_edges(noise_reduction)
 
         # Encontrar contornos
-        contours, hierarchy = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        #contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, hierarchy = cv2.findContours(self.edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # --------------------------------- Suavizado de Contornos------------------------------------------------------
         # Aproximación de contornos usando Ramer-Douglas-Peucker
         result = []
 
         for cnt in contours:
-            epsilon = 0.0000000000001 * cv2.arcLength(cnt, True)  # Ajusta el valor de epsilon para controlar la simplificación
+            epsilon = 10**(-20) * cv2.arcLength(cnt, True)  # Ajusta el valor de epsilon para controlar la simplificación
             approx = cv2.approxPolyDP(cnt, epsilon, True)
             result.append(approx)
         #--------------------------------------------------------------------------------------------------------------
 
         if border_smoothed:
-           if order_area:
-                return sorted(result, key=cv2.contourArea, reverse=True), edges
-           else:
-                return result, edges
+            self.contours = result
         else:
-            if order_area:
-                return sorted(result, key=cv2.contourArea, reverse=True), edges
+            self.contours = result
 
-            else:
-                return contours, edges
+        return self.contours, self.edges
+
 
     def draw_contours(self, title: str,contours, thickness: int) -> None:
         cv2.drawContours(self.image, contours, -1, (0, 0, 255), thickness)
@@ -204,6 +196,10 @@ class ImageTreatment:
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
+    def get_contours(self):
+        return self.contours
+
+
 
     def detect_twelve(self,contours,enable_edges:bool = False):
         """
@@ -230,7 +226,7 @@ class ImageTreatment:
         # Encontrar contornos
 
         #contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+        
         contours, thresh = self.detect_contours(110,255,False,True,True,True)
 
         # Variable para almacenar el resultado
@@ -264,3 +260,12 @@ class ImageTreatment:
         print("Done!!!!")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+
+    def set_threshold(self, min_threshold:int, max_threshold:int):
+        self.max_threshold = max_threshold
+        self.min_threshold = min_threshold
+       
+       
+    def get_threshold(self):
+        return self.min_threshold, self.max_threshold
+    

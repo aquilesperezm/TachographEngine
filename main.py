@@ -6,18 +6,20 @@ import imutils
 from src.classes.image_treatment import ImageTreatment
 
 image_source = 'src\\assets\\images\\image1.jpg'
-image = cv2.imread(image_source,0)
+image = cv2.imread(image_source, 0)
 
 image_template = 'src\\assets\\images\\tear.jpg'
-image2 = cv2.imread(image_template,0)
+image2 = cv2.imread(image_template, 0)
 
 it = ImageTreatment(image)
-#it.extract_center(330, 80, 70, 90, 150)
-c,e = it.detect_contours(110, 255, False, True, True,True)
-#print(len(c))
+it.set_threshold(120,255)
+# it.extract_center(330, 80, 70, 90, 150)
+c, _ = it.generate_contours(True, True, True)
+print(len(c))
 it.draw_contours("Test", c, 2)
-#print(len(c))
-#it.show_details_multiple_contours(c)
+
+# print(len(c))
+# it.show_details_multiple_contours(c)
 #it.detect_twelve(c)
 
 """           
@@ -201,10 +203,6 @@ def temp5():
     cv2.destroyAllWindows()
 """
 
-
-
-
-
 """
 image = extraerCentro(image)
 
@@ -221,7 +219,6 @@ image2 = cv2.imread('src\\assets\\images\\image1.jpg',0)
 encontrarSimilitud(image,image2)
 """
 
-
 # print(len(contours))
 # l = [contours[27],contours[38]]
 
@@ -234,18 +231,13 @@ encontrarSimilitud(image,image2)
 # Deteccion de contornos con Eliminacion de Ruido y Suavizado de Contornos
 
 
-
-#---------------------------------------------------------------------------------------------------------
-
-
-    # Dibujar los contornos
-    # cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
-
-    # Mostrar la imagen con los contornos
-    # cv2.imshow('Contornos', img)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+# ---------------------------------------------------------------------------------------------------------
 
 
+# Dibujar los contornos
+# cv2.drawContours(img, contours, -1, (0, 255, 0), 3)
 
-
+# Mostrar la imagen con los contornos
+# cv2.imshow('Contornos', img)
+# cv2.waitKey(0)
+# cv2.destroyAllWindows()
