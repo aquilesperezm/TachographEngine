@@ -13,10 +13,30 @@ class ImageTreatment:
         self.image = image
         self.contours = None
 
+        # detection properties
+        self.use_canny = False
+        self.noise_reduction = False
+
+        self.apply_smoothing = False
+        self.smoothing_coefficient = -3
+
     def get_image(self):
         return self.image
 
-    def extract_center(self,square_size:int,x_1:int = 0,y_1:int = 0,x_2:int = 0,y_2:int = 0):
+    def set_detection_properties(self, use_canny: bool = False, noise_reduction: bool = False,
+                                 apply_smoothing: bool = False):
+        self.use_canny = use_canny
+        self.noise_reduction = noise_reduction
+        self.apply_smoothing = apply_smoothing
+
+    """
+    the smoothing coefficient must be negative 
+    """
+    def set_smoothing_coefficient(self,coefficient: int):
+        self.smoothing_coefficient = coefficient
+
+
+    def extract_center(self, square_size: int, x_1: int = 0, y_1: int = 0, x_2: int = 0, y_2: int = 0):
 
         # Obtener las dimensiones de la imagen
         alto, ancho = self.image.shape[:2]
@@ -35,68 +55,63 @@ class ImageTreatment:
 
         self.image = imagen_recortada
 
-    def generate_edges(self,noise_reduction: bool):
+    def __generate_edges(self):
 
-        if noise_reduction:
-            img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
-            edges = cv2.Canny(img_blur, self.min_threshold, self.max_threshold)
-        # -----------------------------------------------------------------------------------------------------------
+        # with canny detector
+        if self.use_canny:
+            if self.noise_reduction:
+                img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
+                self.edges = cv2.Canny(img_blur, self.min_threshold, self.max_threshold)
+            else:
+                self.edges = cv2.Canny(self.image, self.min_threshold, self.max_threshold)
+
+        # with threshold detector
         else:
-            # Detectar bordes con Canny
-            edges = cv2.Canny(self.image, self.min_threshold, self.max_threshold)
+            if self.noise_reduction:
+                img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
+                _, thresh = cv2.threshold(img_blur, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
+                self.edges = thresh
+            else:
+                _, thresh = cv2.threshold(self.image, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
+                self.edges = thresh
 
-        self.edges = edges
 
-    def get_thresh(self):
-        # Convertir a escala de grises
-        gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-
-        # Aplicar un umbral
-        _, thresh = cv2.threshold(gray, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
-
-        return thresh
-
-    def generate_contours(self,use_canny:bool = False, noise_reduction: bool = False, border_smoothed: bool = False):
+    def generate_contours(self):
 
         # ----------------------------------- Reduccion de Ruido ---------------------------------------------------
-        if not use_canny and noise_reduction:
-            img_blur = cv2.GaussianBlur(self.image, (5, 5), 0)
-            _, self.edges = cv2.threshold(img_blur, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
-        elif not use_canny:
-            _, self.edges = cv2.threshold(self.image, self.min_threshold, self.max_threshold, cv2.THRESH_BINARY_INV)
-        else:
-            self.generate_edges(noise_reduction)
+        self.__generate_edges()
 
         # Encontrar contornos
         contours, hierarchy = cv2.findContours(self.edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # --------------------------------- Suavizado de Contornos------------------------------------------------------
-        # Aproximación de contornos usando Ramer-Douglas-Peucker
         result = []
+        if self.apply_smoothing:
+            # Aproximación de contornos usando Ramer-Douglas-Peucker
 
-        for cnt in contours:
-            epsilon = 10**(-20) * cv2.arcLength(cnt, True)  # Ajusta el valor de epsilon para controlar la simplificación
-            approx = cv2.approxPolyDP(cnt, epsilon, True)
-            result.append(approx)
-        #--------------------------------------------------------------------------------------------------------------
+            for cnt in contours:
+                epsilon = (10 ** self.smoothing_coefficient) * cv2.arcLength(cnt,
+                                                      True)  # Ajusta el valor de epsilon para controlar la simplificación
+                approx = cv2.approxPolyDP(cnt, epsilon, True)
+                result.append(approx)
+            # --------------------------------------------------------------------------------------------------------------
 
-        if border_smoothed:
+        if self.apply_smoothing:
             self.contours = result
         else:
             self.contours = result
 
         return self.contours, self.edges
 
-
-    def draw_contours(self, title: str,contours, thickness: int) -> None:
-        cv2.drawContours(self.image, contours, -1, (0, 0, 255), thickness)
+    def draw_contours(self, title: str, contours, thickness: int, color) -> None:
+        cv2.drawContours(self.image, contours, -1, color, thickness)
         cv2.imshow(title, self.image)
         cv2.waitKey(0)
 
     def show_details_contour(self, contour):
         # Calcular el área
-        #area = cv2.contourArea(contour)
-        #print(f'Área del contorno: {area} píxeles')
+        # area = cv2.contourArea(contour)
+        # print(f'Área del contorno: {area} píxeles')
 
         # Encontrar el centroide del contorno
         M = cv2.moments(contour)
@@ -128,7 +143,7 @@ class ImageTreatment:
         # Convertir a escala de grises
 
         # Encontrar contornos
-        #contours, _ = cv2.findContours(umbral, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # contours, _ = cv2.findContours(umbral, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         # Dibujar el eje de coordenadas
         alto, ancho = self.image.shape[:2]
@@ -151,14 +166,16 @@ class ImageTreatment:
                 # Verificar intersección con el eje X
                 if y == alto // 2:
                     cv2.circle(self.image, (x, y), 5, (0, 255, 255), -1)  # Marcar intersección en rojo
-                    cv2.putText(self.image, f"Angulo: {angulo:.2f}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),1)
+                    cv2.putText(self.image, f"Angulo: {angulo:.2f}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
+                                1)
                     print(f"Angulo: {angulo:.2f}" + " x: " + str(x) + " y: " + str(y))
 
                 # Verificar intersección con el eje Y
                 if x == ancho // 2:
                     cv2.circle(self.image, (x, y), 5, (0, 255, 255), -1)  # Marcar intersección en rojo
-                    cv2.putText(self.image, f"Angulo: {angulo:.2f}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),1)
-                    print(f"Angulo: {angulo:.2f}" + " x: "+ str(x) + " y: "+ str(y))
+                    cv2.putText(self.image, f"Angulo: {angulo:.2f}", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255),
+                                1)
+                    print(f"Angulo: {angulo:.2f}" + " x: " + str(x) + " y: " + str(y))
 
             # Dibujar el contorno
             cv2.drawContours(self.image, contours, i, (0, 255, 0), 2)
@@ -170,7 +187,7 @@ class ImageTreatment:
 
     def rotate_image(self, grados):
         # Cargar la imagen
-        #imagen = cv2.imread('ruta/a/tu/imagen.jpg')
+        # imagen = cv2.imread('ruta/a/tu/imagen.jpg')
 
         # Obtener las dimensiones de la imagen
         (h, w) = self.image.shape[:2]
@@ -179,7 +196,7 @@ class ImageTreatment:
         centro = (w // 2, h // 2)
 
         # Definir el ángulo de rotación
-        #grados = 45  # Cambia este valor a los grados que desees
+        # grados = 45  # Cambia este valor a los grados que desees
         angulo = -grados  # Negativo para rotar en sentido horario
 
         # Obtener la matriz de rotación
@@ -189,7 +206,7 @@ class ImageTreatment:
         self.image = cv2.warpAffine(self.image, matriz_rotacion, (w, h))
 
         # Guardar la imagen rotada
-        #cv2.imwrite('ruta/a/tu/imagen_rotada.jpg', imagen_rotada)
+        # cv2.imwrite('ruta/a/tu/imagen_rotada.jpg', imagen_rotada)
 
         # Mostrar la imagen rotada (opcional)
         cv2.imshow('Imagen Rotada', self.image)
@@ -199,56 +216,73 @@ class ImageTreatment:
     def get_contours(self):
         return self.contours
 
+    """
+    oem - OCR Engine Mode
+      0 = Original Tesseract only.
+      1 = Neural nets LSTM only.
+      2 = Tesseract + LSTM.
+      3 = Default, based on what is available.
+  psm - Page Segmentation Mode
+      0 = Orientation and script detection (OSD) only.
+      1 = Automatic page segmentation with OSD.
+      2 = Automatic page segmentation, but no OSD, or OCR. (not implemented)
+      3 = Fully automatic page segmentation, but no OSD. (Default)
+      4 = Assume a single column of text of variable sizes.
+      5 = Assume a single uniform block of vertically aligned text.
+      6 = Assume a single uniform block of text.
+      7 = Treat the image as a single text line.
+      8 = Treat the image as a single word.
+      9 = Treat the image as a single word in a circle.
+      10 = Treat the image as a single character.
+      11 = Sparse text. Find as much text as possible in no particular order.
+      12 = Sparse text with OSD.
+      13 = Raw line. Treat the image as a single text line,
+          bypassing hacks that are Tesseract-specific.
+      
+      example:
+          tess_string = pytesseract.image_to_string(img, config=f'--oem {oem} --psm {psm}')
+          regex_result = re.findall(r'[A-Z0-9]', tess_string) # filter only uppercase alphanumeric symbols
+          return ''.join(regex_result)    
+          
+    """
+    def detect_number(self,target_number:str):
 
+        if self.use_canny:
+            raise Exception('This method not use canny detection, please deactivate canny detection')
 
-    def detect_twelve(self,contours,enable_edges:bool = False):
-        """
-        test
+        if self.contours is None:
+            raise Exception('You must generate contours and edges, execute generate_contours first')
 
-        """
-        # Configura la ruta de Tesseract si es necesario
-        # pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windows
-
-        # Cargar la imagen
-        #image = cv2.imread('ruta/a/tu/imagen.jpg')
-
-        # Convertir a escala de grises
-        #gray = cv2.cvtColor(self.image, cv2.COLOR_BGR2GRAY)
-
-        # Aplicar un umbral
-        #_, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
-
-
-        #thresh = self.get_thresh(150,255)
-        #if enable_edges:
-        #    thresh = self.get_edges(150,255,True)
-
-        # Encontrar contornos
-
-        #contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        contours, thresh = self.detect_contours(110,255,False,True,True,True)
 
         # Variable para almacenar el resultado
         detected_number = ""
 
         # Dibujar contornos y detectar el número "12"
-        for contour in contours:
+        print("Starting analysis: ...")
+
+        i = 0
+        for contour in self.contours:
+
+
             # Obtener el rectángulo delimitador
             x, y, w, h = cv2.boundingRect(contour)
 
             # Extraer la región de interés (area del contorno)
-            roi = thresh[y:y + h, x:x + w]
-            #roi = cv2.contourArea(contour)
+            roi = self.edges[y:y + h, x:x + w]
+            # roi = cv2.contourArea(contour)
 
             # Usar Tesseract para reconocer texto en la región de interés
             text = pytesseract.image_to_string(roi, config='--psm 6 outputbase digits')
             detected_number = text.strip()
-            if detected_number != "":
-                print("Numero detectado: " + str(detected_number))
+
+            i = i + 1
+            print(str(i) + " / " + str(len(self.contours)) + " : " + detected_number)
+
+            #if detected_number != "":
+            #print("Numero detectado: " + str(detected_number))
 
             # Verificar si el texto reconocido es "12"
-            if text.strip() == "12":
+            if text.strip() == target_number:
                 detected_number = text.strip()
                 # Dibujar el rectángulo alrededor del número detectado
                 cv2.rectangle(self.image, (x, y), (x + w, y + h), (0, 255, 0), 2)
@@ -256,16 +290,14 @@ class ImageTreatment:
 
         # Mostrar el resultado
         cv2.imshow('Detección de contornos y reconocimiento', self.image)
-        #print(f"Número detectado: {detected_number}")
+        # print(f"Número detectado: {detected_number}")
         print("Done!!!!")
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    def set_threshold(self, min_threshold:int, max_threshold:int):
+    def set_threshold(self, min_threshold: int, max_threshold: int):
         self.max_threshold = max_threshold
         self.min_threshold = min_threshold
-       
-       
+
     def get_threshold(self):
         return self.min_threshold, self.max_threshold
-    

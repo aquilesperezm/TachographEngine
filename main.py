@@ -13,14 +13,17 @@ image2 = cv2.imread(image_template, 0)
 
 it = ImageTreatment(image)
 it.set_threshold(120,255)
+it.set_detection_properties(False,True,True)
+it.set_smoothing_coefficient(-20)
+
 # it.extract_center(330, 80, 70, 90, 150)
-c, _ = it.generate_contours(True, True, True)
+c, _ = it.generate_contours()
 print(len(c))
-it.draw_contours("Test", c, 2)
+#it.draw_contours("Test", c, 2,(0,0,255))
 
 # print(len(c))
 # it.show_details_multiple_contours(c)
-#it.detect_twelve(c)
+it.detect_number('12')
 
 """           
 def temp():
